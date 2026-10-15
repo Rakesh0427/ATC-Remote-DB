@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATC database uplink builder</title>
+  <style>
+    :root {
+      --ink: #1c2b33;
+      --muted: #5c6f7a;
+      --line: #d5e0e6;
+      --bg: #eef3f6;
+      --panel: #ffffff;
+      --head: #0c3d4e;
+      --head-2: #14586c;
+      --accent: #0e6a62;
+      --accent-ink: #ffffff;
+      --warn-bg: #fff6e8;
+      --warn: #8a5a12;
+      --bad-bg: #fdecec;
+      --bad: #8c2f2f;
+      --ok: #0e6a62;
+      --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+    }
+    header {
+      background: linear-gradient(180deg, var(--head) 0%, var(--head-2) 100%);
+      color: white;
+      padding: 22px 28px 18px;
+    }
+    header h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: 0.01em; }
+    header p { margin: 6px 0 0; color: #d5e7ee; max-width: 760px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 22px 20px 40px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tabs button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+    }
+    .tabs button[aria-selected="true"] { background: var(--head); color: white; border-color: var(--head); }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    h2 { margin: 0 0 10px; font-size: 15px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      color: var(--ink);
+      background: white;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .drop {
+      border: 1.5px dashed #9eb4c0;
+      border-radius: 10px;
+      padding: 18px 12px;
+      text-align: center;
+      color: var(--muted);
+      background: #f8fbfc;
+      cursor: pointer;
+    }
+    .drop strong { color: var(--ink); }
+    .drop.hot { border-color: var(--accent); background: #f1faf8; }
+    button.primary, button.secondary, a.file {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    button.primary { background: var(--accent); color: var(--accent-ink); width: 100%; margin-top: 14px; }
+    button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary, a.file { background: var(--head); color: white; }
+    button.linkish {
+      border: 0; background: none; color: var(--head-2); padding: 0; cursor: pointer; font: inherit;
+      text-decoration: underline;
+    }
+    .meta { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .meta b { color: var(--ink); font-weight: 650; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .scroll { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    pre {
+      margin: 10px 0 0;
+      background: #10242c;
+      color: #d7ece4;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      font: 12px/1.4 var(--mono);
+      max-height: 320px;
+      white-space: pre;
+    }
+    .banner { border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+    .warn { background: var(--warn-bg); color: var(--warn); }
+    .bad { background: var(--bad-bg); color: var(--bad); }
+    .ok { color: var(--ok); font-size: 13px; }
+    .hidden { display: none; }
+    .actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ATC database uplink builder</h1>
+    <p>Reads a loadable ATC <code>.bin</code> and writes a <code>.vhf</code> injector script: uppercase hex, 220-character VHF blocks, grouped into ARINC 618 multiblock messages.</p>
+  </header>
+  <main>
+    <div class="tabs">
+      <button id="tab-enc" aria-selected="true" type="button">Bin to VHF</button>
+      <button id="tab-dec" aria-selected="false" type="button">VHF to bin</button>
+    </div>
+
+    <div id="panel-enc" class="grid">
+      <section>
+        <h2>Database</h2>
+        <div id="drop" class="drop">
+          <strong>Drop the ATC .bin here</strong><br>or click to browse
+          <input id="bin-file" type="file" hidden>
+        </div>
+        <p class="note"><button id="use-sample" class="linkish" type="button">Load the SGC10001 sample</button> · part 69001264-505</p>
+        <div id="bin-meta" class="meta"></div>
+        <div class="row">
+          <div>
+            <label for="label">Label</label>
+            <input id="label" value="C1" maxlength="2" autocomplete="off">
+          </div>
+          <div>
+            <label for="address">Address</label>
+            <input id="address" value="#ID#" maxlength="7" autocomplete="off">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="ack">Ack field</label>
+            <select id="ack">
+              <option value="ACK" selected>ACK</option>
+              <option value="NAK">NAK</option>
+            </select>
+          </div>
+          <div>
+            <label for="delay">Delay after each block (ms)</label>
+            <input id="delay" type="number" min="0" max="120000" value="1000">
+          </div>
+        </div>
+        <button id="convert" class="primary" type="button" disabled>Convert to .vhf</button>
+        <p class="note">Does not transmit. The file is what the ground injector sends. Uplink label is C1.</p>
+      </section>
+      <section>
+        <h2>Result</h2>
+        <div id="enc-status" class="meta">Choose a database file.</div>
+        <div id="enc-warn"></div>
+        <div class="actions hidden" id="enc-actions">
+          <a id="download" class="file" href="#">Download .vhf</a>
+        </div>
+        <div id="centres-wrap" class="hidden">
+          <h2 style="margin-top:16px">Centres in this image</h2>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>#</th><th>GFD</th><th>Name</th><th>Ctry</th><th>TSEL</th></tr></thead>
+              <tbody id="centres"></tbody>
+            </table>
+          </div>
+        </div>
+        <pre id="preview" class="hidden"></pre>
+      </section>
+    </div>
+
+    <div id="panel-dec" class="grid hidden">
+      <section>
+        <h2>Uplink file</h2>
+        <div id="drop-vhf" class="drop">
+          <strong>Drop a .vhf file here</strong><br>or click to browse
+          <input id="vhf-file" type="file" hidden>
+        </div>
+        <button id="decode" class="primary" type="button" disabled>Rebuild .bin</button>
+        <p class="note">Checks every block CRC and the image CRC, then offers the rebuilt database. A bad block leaves the download disabled.</p>
+      </section>
+      <section>
+        <h2>Rebuild</h2>
+        <div id="dec-status" class="meta">Choose a .vhf file.</div>
+        <div class="actions hidden" id="dec-actions">
+          <a id="download-bin" class="file" href="#">Download rebuilt .bin</a>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let binFile = null;
+    let vhfFile = null;
+
+    function showTab(which) {
+      $("tab-enc").setAttribute("aria-selected", which === "enc");
+      $("tab-dec").setAttribute("aria-selected", which === "dec");
+      $("panel-enc").classList.toggle("hidden", which !== "enc");
+      $("panel-dec").classList.toggle("hidden", which !== "dec");
+    }
+    $("tab-enc").onclick = () => showTab("enc");
+    $("tab-dec").onclick = () => showTab("dec");
+
+    function toB64(buf) {
+      const bytes = new Uint8Array(buf);
+      let s = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(s);
+    }
+    function fromB64(b64) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    function bindDrop(zone, input, onfile) {
+      zone.onclick = () => input.click();
+      zone.ondragover = (e) => { e.preventDefault(); zone.classList.add("hot"); };
+      zone.ondragleave = () => zone.classList.remove("hot");
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove("hot");
+        if (e.dataTransfer.files[0]) onfile(e.dataTransfer.files[0]);
+      };
+      input.onchange = () => { if (input.files[0]) onfile(input.files[0]); };
+    }
+
+    async function inspect(file) {
+      const buf = await file.arrayBuffer();
+      const res = await fetch("/api/inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data_b64: toB64(buf) }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "inspect failed");
+      return body;
+    }
+
+    function renderCentres(info) {
+      const wrap = $("centres-wrap");
+      const body = $("centres");
+      body.innerHTML = "";
+      if (!info.recognized) { wrap.classList.add("hidden"); return; }
+      wrap.classList.remove("hidden");
+      for (const c of info.centres) {
+        const tr = document.createElement("tr");
+        const odd = c.tsel !== "cm";
+        tr.innerHTML = `<td>${c.index}</td><td>${c.gfd}</td><td>${c.name}</td><td>${c.country}</td><td>${odd ? "<b>" + c.tsel + "</b>" : c.tsel}</td>`;
+        body.appendChild(tr);
+      }
+    }
+
+    async function setBin(file) {
+      binFile = file;
+      $("convert").disabled = false;
+      $("bin-meta").textContent = file.name;
+      try {
+        const info = await inspect(file);
+        const bits = [`<b>${info.size}</b> bytes`, `CRC <b>${info.file_crc32}</b>`];
+        if (info.recognized) {
+          bits.push(`part <b>${info.part}</b>`, `id <b>${info.db_id}</b>`, `<b>${info.centres.length}</b> centres`, `<b>${info.empty_slots}</b> empty slots`);
+        } else {
+          bits.push("not the 55-byte centre layout; it will still be hex-encoded as a raw image");
+        }
+        $("bin-meta").innerHTML = bits.join(" · ");
+        renderCentres(info);
+      } catch (err) {
+        $("bin-meta").textContent = err.message;
+      }
+    }
+
+    bindDrop($("drop"), $("bin-file"), setBin);
+    $("use-sample").onclick = async () => {
+      const res = await fetch("/sample.bin");
+      const blob = await res.blob();
+      await setBin(new File([blob], "SGC10001.bin"));
+    };
+
+    function banner(notes) {
+      const host = $("enc-warn");
+      host.innerHTML = "";
+      for (const note of notes) {
+        const div = document.createElement("div");
+        div.className = "banner warn";
+        div.textContent = note;
+        host.appendChild(div);
+      }
+    }
+
+    $("convert").onclick = async () => {
+      if (!binFile) return;
+      $("convert").disabled = true;
+      $("enc-status").textContent = "Converting…";
+      try {
+        const buf = await binFile.arrayBuffer();
+        const res = await fetch("/api/convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: binFile.name,
+            data_b64: toB64(buf),
+            label: $("label").value,
+            address: $("address").value,
+            ack: $("ack").value,
+            delay_ms: Number($("delay").value),
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || "convert failed");
+        const s = body.stats;
+        $("enc-status").innerHTML =
+          `<span class="ok">Ready.</span> Session <b>${s.session}</b> · ` +
+          `<b>${s.data_slices}</b> data slices · <b>${s.air_blocks}</b> air blocks · ` +
+          `<b>${s.messages}</b> multiblock messages · longest text <b>${s.max_text}</b>/220 · ` +
+          `image CRC <b>${s.file_crc32}</b>`;
+        banner(s.warnings || []);
+        $("preview").classList.remove("hidden");
+        $("preview").textContent = body.preview;
+        const blob = new Blob([body.vhf], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        $("download").href = url;
+        $("download").download = body.filename;
+        $("enc-actions").classList.remove("hidden");
+      } catch (err) {
+        $("enc-status").innerHTML = `<span class="bad">${err.message}</span>`;
+      } finally {
+        $("convert").disabled = false;
+      }
+    };
+
+    window.addEventListener("load", async () => {
+      try {
+        const res = await fetch("/sample.bin");
+        if (!res.ok) return;
+        const blob = await res.blob();
+        await setBin(new File([blob], "SGC10001.bin"));
+        $("convert").click();
+      } catch (err) {
+        $("enc-status").textContent = "Sample could not be loaded.";
+      }
+    });
+
+    bindDrop($("drop-vhf"), $("vhf-file"), (file) => {
+      vhfFile = file;
+      $("decode").disabled = false;
+      $("dec-status").textContent = file.name;
+    });
+
+    $("decode").onclick = async () => {
+      if (!vhfFile) return;
+      $("decode").disabled = true;
+      $("dec-status").textContent = "Checking blocks…";
+      try {
+        const text = await vhfFile.text();
+        const res = await fetch("/api/decode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vhf: text }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || "decode failed");
+        const extra = body.recognized ? ` · part ${body.part} · ${body.centres} centres` : "";
+        $("dec-status").innerHTML = `<span class="ok">CRC matched.</span> <b>${body.size}</b> bytes · CRC <b>${body.file_crc32}</b>${extra}`;
+        const blob = new Blob([fromB64(body.data_b64)], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        $("download-bin").href = url;
+        $("download-bin").download = (vhfFile.name.replace(/\.vhf$/i, "") || "atc-db") + ".bin";
+        $("dec-actions").classList.remove("hidden");
+      } catch (err) {
+        $("dec-status").innerHTML = `<span class="bad">${err.message}</span>`;
+        $("dec-actions").classList.add("hidden");
+      } finally {
+        $("decode").disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
