@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Test ATC VHF (auto)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/c/test_sim",
+      "args": ["--auto", "${workspaceFolder}/samples/SGC10001.bin"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "preLaunchTask": "Build ATC VHF sim",
+      "MIMode": "gdb",
+      "windows": {
+        "program": "${workspaceFolder}/c/test_sim.exe"
+      }
+    },
+    {
+      "name": "ATC VHF menu",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/c/test_sim",
+      "args": ["${workspaceFolder}/samples/SGC10001.bin"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "preLaunchTask": "Build ATC VHF sim",
+      "MIMode": "gdb",
+      "windows": {
+        "program": "${workspaceFolder}/c/test_sim.exe"
+      }
+    }
+  ]
+}

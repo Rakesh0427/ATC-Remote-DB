@@ -1,0 +1,84 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build ATC VHF sim",
+      "type": "shell",
+      "command": "gcc",
+      "args": [
+        "-Wall",
+        "-Wextra",
+        "-std=c11",
+        "-g",
+        "-o",
+        "${workspaceFolder}/c/test_sim",
+        "${workspaceFolder}/c/atc_codec.c",
+        "${workspaceFolder}/c/test_sim.c"
+      ],
+      "windows": {
+        "args": [
+          "-Wall",
+          "-Wextra",
+          "-std=c11",
+          "-g",
+          "-o",
+          "${workspaceFolder}/c/test_sim.exe",
+          "${workspaceFolder}/c/atc_codec.c",
+          "${workspaceFolder}/c/test_sim.c"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Test ATC VHF sim",
+      "type": "shell",
+      "command": "${workspaceFolder}/c/test_sim",
+      "args": ["--auto", "${workspaceFolder}/samples/SGC10001.bin"],
+      "windows": {
+        "command": "${workspaceFolder}/c/test_sim.exe"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "Build ATC VHF sim",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run ATC VHF menu",
+      "type": "shell",
+      "command": "${workspaceFolder}/c/test_sim",
+      "args": ["${workspaceFolder}/samples/SGC10001.bin"],
+      "windows": {
+        "command": "${workspaceFolder}/c/test_sim.exe"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": "Build ATC VHF sim",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}
